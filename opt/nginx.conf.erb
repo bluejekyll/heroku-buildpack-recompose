@@ -11,6 +11,8 @@ http {
   server {
       listen <%= ENV["PORT"] %>;
       server_name _;
+      access_log /dev/null;
+      error_log /dev/null;
       location / {
           proxy_set_header   X-Real-IP $remote_addr;
           proxy_set_header   Host      $http_host;
