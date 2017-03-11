@@ -10,6 +10,7 @@ set -m
 # recomposision is complete
 cmd=${1}
 AWS_CMD=/app/vendor/awscli/bin/aws
+PSQL_TAR=psql.tar
 
 process_slug() {
   local app_release=${1:?}
@@ -138,6 +139,9 @@ if [ -n "$DATAMODEL" ] ; then
 fi
 
 rm $HOME/.netrc
+
+# download and untar the correct psql binary from s3
+${AWS_CMD:?} s3 cp s3://${AWS_S3_BUCKET_NAME:?}/${PSQL_TAR:?} - | tar xvf 2>&1
 
 echo "true" > $HOME/.recompose
 
