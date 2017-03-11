@@ -141,7 +141,9 @@ fi
 rm $HOME/.netrc
 
 # download and untar the correct psql binary from s3
+echo "Downloading psql.tar from s3..."
 ${AWS_CMD:?} s3 cp s3://${AWS_S3_BUCKET_NAME:?}/${PSQL_TAR:?} - | tar xvf 2>&1
+echo "extracted psql"
 
 echo "true" > $HOME/.recompose
 
