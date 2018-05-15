@@ -30,12 +30,17 @@ nginx_dir=$BUILD_DIR/.nginx
 nginx_bin_dir=$nginx_dir/bin
 mkdir -p $nginx_bin_dir
 
-$(fetch_nginx_tarball) | tar xzC $nginx_bin_dir
-cp $OPT_DIR/web $nginx_dir/bin/nginx-start
-chmod +x $nginx_dir/bin/nginx-start
-echo "-----> Installed nginx"
+# nginx is only built when enabled...
+if [ -z ${NGINX_DISABLED} ]; then
+    $(fetch_nginx_tarball) | tar xzC $nginx_bin_dir
+    cp $OPT_DIR/web $nginx_dir/bin/nginx-start
+    chmod +x $nginx_dir/bin/nginx-start
+    cp $OPT_DIR/nginx.conf.erb $nginx_dir/
+
+    echo "-----> NGINX installed"
+else
+    echo "-----> NGINX based runtime disabled"
+fi
 
 cp $OPT_DIR/recompose $heroku_bin_dir/recompose
 chmod +x ${heroku_bin_dir}/recompose
-
-cp $OPT_DIR/nginx.conf.erb $nginx_dir/
