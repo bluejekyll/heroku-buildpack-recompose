@@ -92,6 +92,18 @@ java -jar recomposer.jar
 echo "Java Recomposer Completed"
 echo "true" >$HOME/.recompose
 
+# nginx is only built when enabled...
+if [ -n ${NGINX_DISABLED} ]; then
+    echo "NGINX disabled, setting http_port in properties"
+
+    ## some hackery here... rewriting the http_port
+    sed "s/http_port = .*/http_port = ${PORT:?}/" workspace/build/override.properties > workspace/build/override.properties.dyn
+    if ! grep http_port workspace/build/override.properties.dyn ; then 
+       echo "http_port = ${PORT:?}" >> workspace/build/override.properties.dyn 
+    fi
+    mv workspace/build/override.properties.dyn workspace/build/override.properties
+fi
+
 if [ -n "$cmd" ]; then
     echo "--> cmd: ${cmd}"
     exec bash ${cmd:?}
