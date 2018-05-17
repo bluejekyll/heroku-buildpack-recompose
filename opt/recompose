@@ -50,18 +50,6 @@ process_slug() {
 [ -z "$AWS_SECRET_ACCESS_KEY" ] && echo " ! ERROR: missing AWS_SECRET_ACCESS_KEY config var" && exit 1
 [ -z "$AWS_TOOL_S3_BUCKET_NAME" ] && echo " ! ERROR: missing AWS_S3_BUCKET_NAME config var" && exit 1
 
-
-# Only start nginx if he WEB_PROCESS_CMD is defined
-if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
-  cd .nginx > /dev/null 2>&1
-  eval "bin/nginx-start &"
-  pid=$!
-  cd - > /dev/null 2>&1
-  trap "kill -9 $pid; exit" SIGKILL
-else
-  echo "No .nginx/bin/nginx-start file found!"
-fi
-
 # create netrc
 cat >> $HOME/.netrc <<EOF
 machine api.heroku.com
@@ -80,8 +68,6 @@ echo "**** Downloading recomposer.jar from s3..."
  ${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/releaser-$RECOMPOSE_VERSION.jar recomposer.jar 2>&1
 ###################################################################################################
 
-
-
 rm $HOME/.netrc
 
 echo "Invoke Java Recomposer"
@@ -90,6 +76,27 @@ echo `which java`
 java -jar recomposer.jar
 echo "Java Recomposer Completed"
 echo "true" > $HOME/.recompose
+
+# Only start nginx if he WEB_PROCESS_CMD is defined
+if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
+  # delay the launch of nginx
+  (
+    echo "====> Waiting for ALIVE from Core";
+    while [ "ALIVE" != "$(curl -s http://localhost:8080/ping.jsp)" ] ; do 
+        echo -n "."
+        sleep 1
+    done
+
+    cd .nginx > /dev/null 2>&1
+    eval "bin/nginx-start &"
+    pid=$!
+    cd - > /dev/null 2>&1
+    trap "kill -9 $pid; exit" SIGKILL
+  )&
+else
+  echo "No .nginx/bin/nginx-start file found!"
+  exit 1
+fi
 
 if [ -n "$cmd" ]; then
   echo "--> cmd: ${cmd}"
