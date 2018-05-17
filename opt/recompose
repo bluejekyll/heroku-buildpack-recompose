@@ -88,11 +88,11 @@ if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
     done
 
     cd .nginx > /dev/null 2>&1
-    eval "bin/nginx-start &"
-    pid=$!
-    cd - > /dev/null 2>&1
-    trap "kill -9 $pid; exit" SIGKILL
+    bin/nginx-start
   )&
+
+  pid=$!  
+  trap "kill -9 $pid; exit" SIGKILL
 else
   echo "No .nginx/bin/nginx-start file found!"
   exit 1
