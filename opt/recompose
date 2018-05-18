@@ -83,9 +83,18 @@ if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
   (
     date > .app-starting.date
     echo "====> Waiting for ALIVE from Core";
-    while [ "ALIVE" != "$(curl -s -m 1 http://localhost:8080/ping.jsp)" ] ; do 
-        echo "====> Still Waiting for Core to live"
-        sleep 1
+
+    success_count=0
+    while [[ "$success_count" -lt 5 ]] ; do
+        if [[ "ALIVE" != "$(curl -s -m 1 http://localhost:8080/ping.jsp)" ]] ; then
+            echo "====> Still Waiting for Core to live"
+            # reset successes... we want to track only consecutive successes
+            success_count=0
+            sleep 1
+        else
+            echo "====> Core is almost ALIVE: ${success_count:?}"
+            success_count=$((success_count+1))
+        fi
     done
     echo "====> Core is ALIVE! Starting nginx";
     date > .app-started.date
