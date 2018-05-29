@@ -50,23 +50,6 @@ process_slug() {
 [ -z "$AWS_SECRET_ACCESS_KEY" ] && echo " ! ERROR: missing AWS_SECRET_ACCESS_KEY config var" && exit 1
 [ -z "$AWS_TOOL_S3_BUCKET_NAME" ] && echo " ! ERROR: missing AWS_S3_BUCKET_NAME config var" && exit 1
 
-# create netrc
-cat >>$HOME/.netrc <<EOF
-machine api.heroku.com
-  login $HEROKU_API_USER
-  password $HEROKU_API_KEY
-EOF
-
-############ Downloading jdk1.8.0_131_x64,  recomposer.jar #######################################
-JAVA_VERSION="$(basename $JAVA_HOME)"
-mkdir -p $JAVA_HOME
-echo "**** Downloading $JAVA_VERSION from s3..."
-${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/$JAVA_VERSION.tar.gz - | tar xzm --strip-components=1 -C $JAVA_HOME 2>&1
-echo "Completed downloading jdk1.8.0_131_x64 from s3Key:d5eab6c07320844df2961afd84f95df8"
-echo "**** Downloading recomposer.jar from s3..."
-${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/releaser-$RECOMPOSE_VERSION.jar recomposer.jar 2>&1
-###################################################################################################
-
 # Only start nginx if he WEB_PROCESS_CMD is defined
 if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
     (
@@ -103,6 +86,23 @@ else
     echo "No .nginx/bin/nginx-start file found!"
     exit 1
 fi
+
+# create netrc
+cat >>$HOME/.netrc <<EOF
+machine api.heroku.com
+  login $HEROKU_API_USER
+  password $HEROKU_API_KEY
+EOF
+
+############ Downloading jdk1.8.0_131_x64,  recomposer.jar #######################################
+JAVA_VERSION="$(basename $JAVA_HOME)"
+mkdir -p $JAVA_HOME
+echo "**** Downloading $JAVA_VERSION from s3..."
+${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/$JAVA_VERSION.tar.gz - | tar xzm --strip-components=1 -C $JAVA_HOME 2>&1
+echo "Completed downloading jdk1.8.0_131_x64 from s3Key:d5eab6c07320844df2961afd84f95df8"
+echo "**** Downloading recomposer.jar from s3..."
+${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/releaser-$RECOMPOSE_VERSION.jar recomposer.jar 2>&1
+###################################################################################################
 
 rm $HOME/.netrc
 
