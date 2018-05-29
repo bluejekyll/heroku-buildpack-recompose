@@ -14,34 +14,34 @@ AWS_CMD=/app/vendor/awscli/bin/aws
 SFDC_CUSTOM=sfdc-custom.tar.gz
 
 process_slug() {
-  local app_release=${1:?}
+    local app_release=${1:?}
 
-  echo "--> Processing $app_release"
+    echo "--> Processing $app_release"
 
-  local app_release_array=($app_release)
-  local app=${app_release_array[0]}
-  local release=${app_release_array[1]}
+    local app_release_array=($app_release)
+    local app=${app_release_array[0]}
+    local release=${app_release_array[1]}
 
-  local slug_id=$(curl --retry 3 -s -n https://api.heroku.com/apps/$app/releases/$release \
-    -H "Accept: application/vnd.heroku+json; version=3" | \
-    python -c 'import json,sys;obj=json.load(sys.stdin);print obj["slug"]["id"]')
+    local slug_id=$(curl --retry 3 -s -n https://api.heroku.com/apps/$app/releases/$release \
+        -H "Accept: application/vnd.heroku+json; version=3" |
+        python -c 'import json,sys;obj=json.load(sys.stdin);print obj["slug"]["id"]')
 
-  if [ -n "$slug_id" ]; then
-    local slug_url=$(curl --retry 3 -s -n https://api.heroku.com/apps/$app/slugs/$slug_id \
-      -H "Accept: application/vnd.heroku+json; version=3" | \
-      python -c 'import json,sys;obj=json.load(sys.stdin);print obj["blob"]["url"]')
+    if [ -n "$slug_id" ]; then
+        local slug_url=$(curl --retry 3 -s -n https://api.heroku.com/apps/$app/slugs/$slug_id \
+            -H "Accept: application/vnd.heroku+json; version=3" |
+            python -c 'import json,sys;obj=json.load(sys.stdin);print obj["blob"]["url"]')
 
-    if [ -n "$slug_url" ]; then
-      echo "--> Downloading slug ${slug_id} for ${app}"
-      curl --retry 3 -s -L "${slug_url}" | \
-          tar xzm --strip-components=1 -C . 2>&1 | \
-          grep -v "Ignoring unknown extended header keyword"
+        if [ -n "$slug_url" ]; then
+            echo "--> Downloading slug ${slug_id} for ${app}"
+            curl --retry 3 -s -L "${slug_url}" |
+                tar xzm --strip-components=1 -C . 2>&1 |
+                grep -v "Ignoring unknown extended header keyword"
+        else
+            echo "! ERROR: could not find slug $slug_id for $app_release"
+        fi
     else
-      echo "! ERROR: could not find slug $slug_id for $app_release"
+        echo "! ERROR: could not find release v${release} for ${app}"
     fi
-  else
-    echo "! ERROR: could not find release v${release} for ${app}"
-  fi
 }
 
 [ -z "$HEROKU_API_KEY" ] && echo " ! ERROR: missing HEROKU_API_KEY config var" && exit 1
@@ -51,12 +51,11 @@ process_slug() {
 [ -z "$AWS_TOOL_S3_BUCKET_NAME" ] && echo " ! ERROR: missing AWS_S3_BUCKET_NAME config var" && exit 1
 
 # create netrc
-cat >> $HOME/.netrc <<EOF
+cat >>$HOME/.netrc <<EOF
 machine api.heroku.com
   login $HEROKU_API_USER
   password $HEROKU_API_KEY
 EOF
-
 
 ############ Downloading jdk1.8.0_131_x64,  recomposer.jar #######################################
 JAVA_VERSION="$(basename $JAVA_HOME)"
@@ -65,54 +64,58 @@ echo "**** Downloading $JAVA_VERSION from s3..."
 ${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/$JAVA_VERSION.tar.gz - | tar xzm --strip-components=1 -C $JAVA_HOME 2>&1
 echo "Completed downloading jdk1.8.0_131_x64 from s3Key:d5eab6c07320844df2961afd84f95df8"
 echo "**** Downloading recomposer.jar from s3..."
- ${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/releaser-$RECOMPOSE_VERSION.jar recomposer.jar 2>&1
+${AWS_CMD:?} s3 cp s3://${AWS_TOOL_S3_BUCKET_NAME:?}/releaser-$RECOMPOSE_VERSION.jar recomposer.jar 2>&1
 ###################################################################################################
+
+# Only start nginx if he WEB_PROCESS_CMD is defined
+if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
+    (
+        if [ -n "$DELAY_NGINX_TO_ALIVE" ]; then
+            # delay the launch of nginx
+            date >.app-starting.date
+            echo "====> Waiting for ALIVE from Core"
+
+            success_count=0
+            while [[ "$success_count" -lt 5 ]]; do
+                if [[ "ALIVE" != "$(curl -s -m 1 http://localhost:8080/ping.jsp)" ]]; then
+                    echo "====> Still Waiting for Core to live"
+                    # reset successes... we want to track only consecutive successes
+                    success_count=0
+                    sleep 1
+                else
+                    echo "====> Core is almost ALIVE: ${success_count:?}"
+                    success_count=$((success_count + 1))
+                fi
+            done
+            echo "====> Core is ALIVE! Starting nginx"
+            date >.app-started.date
+        fi
+
+        # start nginx
+        cd .nginx >/dev/null 2>&1
+        bin/nginx-start
+    ) &
+
+    # sets a trap to kill the nginx process if this script is killed
+    pid=$!
+    trap "kill -9 $pid; exit" SIGKILL
+else
+    echo "No .nginx/bin/nginx-start file found!"
+    exit 1
+fi
 
 rm $HOME/.netrc
 
 echo "Invoke Java Recomposer"
 echo $JAVA_HOME
-echo `which java`
+echo $(which java)
 java -jar recomposer.jar
 echo "Java Recomposer Completed"
-echo "true" > $HOME/.recompose
-
-# Only start nginx if he WEB_PROCESS_CMD is defined
-if [ -f .nginx/bin/nginx-start ] && [ -n "$WEB_PROCESS_CMD" ]; then
-  # delay the launch of nginx
-  (
-    date > .app-starting.date
-    echo "====> Waiting for ALIVE from Core";
-
-    success_count=0
-    while [[ "$success_count" -lt 5 ]] ; do
-        if [[ "ALIVE" != "$(curl -s -m 1 http://localhost:8080/ping.jsp)" ]] ; then
-            echo "====> Still Waiting for Core to live"
-            # reset successes... we want to track only consecutive successes
-            success_count=0
-            sleep 1
-        else
-            echo "====> Core is almost ALIVE: ${success_count:?}"
-            success_count=$((success_count+1))
-        fi
-    done
-    echo "====> Core is ALIVE! Starting nginx";
-    date > .app-started.date
-
-    cd .nginx > /dev/null 2>&1
-    bin/nginx-start
-  )&
-
-  pid=$!  
-  trap "kill -9 $pid; exit" SIGKILL
-else
-  echo "No .nginx/bin/nginx-start file found!"
-  exit 1
-fi
+echo "true" >$HOME/.recompose
 
 if [ -n "$cmd" ]; then
-  echo "--> cmd: ${cmd}"
-  exec bash ${cmd:?}
+    echo "--> cmd: ${cmd}"
+    exec bash ${cmd:?}
 fi
 
 echo "--> $0 exiting"
